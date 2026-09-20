@@ -9,8 +9,6 @@ stages:
       - paths.raw
     outs:
       - data/raw.jsonl
-      - data/val.jsonl
-      - data/test.jsonl
     metrics:
       - metrics/collect.json:
           cache: false
@@ -69,8 +67,8 @@ stages:
       - paths.test
     outs:
       - data/train.jsonl
-      - data/val.jsonl        # <-- ФИКС
-      - data/test.jsonl       # <-- ФИКС
+      - data/val.jsonl
+      - data/test.jsonl
     metrics:
       - metrics/split.json:
           cache: false
