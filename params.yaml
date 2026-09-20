@@ -5,12 +5,7 @@ collect:
   # Версия датасета переключается ЗДЕСЬ. Всё остальное — следствие.
   version: "v1"              # v1 | v2
   n_rows: 3000               # строк, берём из каждого файла-источника ПОСЛЕ фильтров
-  sources:
-    v1:
-      - "../../datasets/nmo/sft_single/train/0000.parquet"
-    v2:
-      - "../../datasets/nmo/sft_single/train/0000.parquet"
-      - "../../datasets/nmo/sft_single/train/0001.parquet"
+  sources: "pavelfedortsov/russian-colloquial-sft-50k"
 
   # --- Переработка источника ---
   # Чужой готовый набор — это сырьё, а не сдача (см. README, «Готовый датасет

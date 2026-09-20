@@ -1,19 +1,10 @@
 """Стадия collect: источник → data/raw.jsonl.
 
-ЗДЕСЬ студент подменяет сбор на свой. Ниже — чтение parquet курсового датасета
-НМО; у вас на этом месте будет парсер сайта, выгрузка из БД, экспорт из Notion.
-Контракт стадии, а не её внутренности, держит остальной пайплайн:
-на выходе JSONL со строками {"id", "topic", "messages": [system, user, assistant]}.
-
-Скачанный чужой набор сам по себе сдачей не является (README, «Готовый датасет
-как источник»). Поэтому стадия не перекладывает parquet в JSONL один в один,
-а делает три вещи, и каждая видна числом в metrics/collect.json:
-
-  1. сужает набор до перечисленных тем (collect.topics), если это нужно задаче;
-  2. сверяет ответ с разметкой источника (collect.verify_answer_index) —
-     расхождение выбрасывается, а не переносится в обучение;
-  3. разводит единственную инструкцию источника на варианты
-     (collect.system_prompts), чтобы модель не заучила её формулировку.
+Источник — HuggingFace датасет pavelfedortsov/russian-colloquial-sft-50k.
+Переработка:
+  1. генерируем id из хэша user-сообщения;
+  2. генерируем topic эвристикой по ключевым словам;
+  3. вставляем system-промпт из collect.system_prompts по id.
 """
 
 import hashlib
@@ -21,34 +12,40 @@ import json
 import time
 from pathlib import Path
 
-import pyarrow.parquet as pq
+from datasets import load_dataset
 
-from src.config import load_params, source_files
+from src.config import load_params
 
-COLUMNS = ["id", "topic", "correct_choice_indices", "messages"]
-BATCH = 2000
+
+TOPIC_KEYWORDS = {
+    "politics_kz":  ["казахстан", "кыргыз", "қазақ", "назарбаев", "жапаров"],
+    "politics_ru":  ["росси", "путин", "кремл", "совок", "ссср", "хрущев"],
+    "politics_world": ["украин", "израил", "палестин", "хамас", "албани"],
+    "tech":         ["телефон", "аккаунт", "телеграм", "приложен", "сайт", "программ", "нейросет", "код", "пароль"],
+    "religion":     ["аллах", "бог", "церков", "мечет", "религ", "молитв", "халяль"],
+    "math":         ["аргумент", "корень", "формул", "математик", "функци", "уравнен", "геометри"],
+    "daily":        ["квартир", "работ", "учёб", "универ", "семь", "друг", "родственник", "аренд", "зарплат"],
+    "culture":      ["фильм", "книг", "стих", "музык", "песн", "литератур", "борат"],
+    "emotion":      ["любл", "нравит", "свет", "звезд", "красот", "сердц", "чувств"],
+}
+
+
+def guess_topic(text: str) -> str:
+    low = text.lower()
+    for topic, kws in TOPIC_KEYWORDS.items():
+        if any(kw in low for kw in kws):
+            return topic
+    return "other"
+
+
+def make_id(user_text: str, idx: int) -> str:
+    digest = hashlib.sha1(user_text.encode("utf-8")).hexdigest()[:12]
+    return f"colq_{idx:06d}_{digest}"
 
 
 def pick_prompt(example_id: str, variants: list[str]) -> str:
-    """Детерминированно выбрать вариант инструкции по id примера.
-
-    Именно sha1, а не встроенный hash(): тот солится на каждый запуск процесса,
-    и raw.jsonl переставал бы быть воспроизводимым.
-    """
     digest = hashlib.sha1(example_id.encode("utf-8")).hexdigest()
     return variants[int(digest, 16) % len(variants)]
-
-
-def answer_matches_source(row: dict) -> bool:
-    """Совпадает ли ответ ассистента с correct_choice_indices источника.
-
-    В sft_single правильный вариант ровно один, а ответ начинается с его
-    номера. Всё, что не так, — либо другой тип задачи, либо битая разметка.
-    """
-    indices = list(row["correct_choice_indices"] or [])
-    if len(indices) != 1:
-        return False
-    return row["messages"][2]["content"].startswith(f"Ответ: {indices[0]}")
 
 
 def main() -> None:
@@ -59,65 +56,54 @@ def main() -> None:
     variants = cfg["system_prompts"]
     if not variants:
         raise SystemExit("collect.system_prompts пуст: инструкцию брать неоткуда")
-    topics = cfg["topics"]
-    wanted = set(topics) if topics else None
 
     out = Path(paths["raw"])
     out.parent.mkdir(parents=True, exist_ok=True)
 
     started = time.perf_counter()
-    scanned = written = dropped_topic = dropped_answer = 0
+    scanned = written = 0
     prompts_used: set[str] = set()
+    topics_used: dict[str, int] = {}
+
+    ds = load_dataset(cfg["sources"], split="train", streaming=True)
 
     with out.open("w", encoding="utf-8") as fh:
-        for src in source_files(params):
-            if not src.exists():
-                raise SystemExit(f"нет файла-источника: {src}")
-            taken = 0
-            # Фильтры применяются ДО отсечки n_rows: иначе «первые 3000 строк»
-            # и «3000 строк по теме» — разные вещи, и сужение набора давало бы
-            # случайный огрызок вместо заказанного объёма.
-            for batch in pq.ParquetFile(src).iter_batches(batch_size=BATCH, columns=COLUMNS):
-                for row in batch.to_pylist():
-                    if taken >= n_rows:
-                        break
-                    scanned += 1
-                    if wanted is not None and row["topic"] not in wanted:
-                        dropped_topic += 1
-                        continue
-                    if cfg["verify_answer_index"] and not answer_matches_source(row):
-                        dropped_answer += 1
-                        continue
-                    prompt = pick_prompt(row["id"], variants)
-                    prompts_used.add(prompt)
-                    record = {
-                        "id": row["id"],
-                        "topic": row["topic"],
-                        # messages из parquet уже в формате чата; меняется только
-                        # системная реплика — на выбранный вариант инструкции.
-                        "messages": [
-                            {"role": "system", "content": prompt},
-                            *(
-                                {"role": m["role"], "content": m["content"]}
-                                for m in row["messages"][1:]
-                            ),
-                        ],
-                    }
-                    fh.write(json.dumps(record, ensure_ascii=False) + "\n")
-                    taken += 1
-                    written += 1
-                if taken >= n_rows:
-                    break
+        for row in ds:
+            if written >= n_rows:
+                break
+            scanned += 1
+            msgs = row["messages"]
+            if len(msgs) < 2 or msgs[0]["role"] != "user" or msgs[1]["role"] != "assistant":
+                continue
+
+            user_text = msgs[0]["content"]
+            assistant_text = msgs[1]["content"]
+
+            example_id = make_id(user_text, written)
+            topic = guess_topic(user_text)
+            prompt = pick_prompt(example_id, variants)
+            prompts_used.add(prompt)
+            topics_used[topic] = topics_used.get(topic, 0) + 1
+
+            record = {
+                "id": example_id,
+                "topic": topic,
+                "messages": [
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": user_text},
+                    {"role": "assistant", "content": assistant_text},
+                ],
+            }
+            fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+            written += 1
 
     metrics = {
         "version": cfg["version"],
-        "files": len(source_files(params)),
+        "sources": cfg["sources"],
         "rows_scanned": scanned,
         "rows_written": written,
-        "dropped_topic_filter": dropped_topic,
-        "dropped_answer_mismatch": dropped_answer,
-        "topics_filter": len(wanted) if wanted else 0,
         "system_prompt_variants": len(prompts_used),
+        "topics": topics_used,
         "seconds": round(time.perf_counter() - started, 2),
     }
     mpath = Path(paths["metrics_collect"])
@@ -125,10 +111,8 @@ def main() -> None:
     mpath.write_text(json.dumps(metrics, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     print(
-        f"collect: версия {cfg['version']}, файлов {metrics['files']}, "
-        f"просмотрено {scanned}, записано {written} "
-        f"(фильтр тем -{dropped_topic}, расхождение с разметкой -{dropped_answer}), "
-        f"вариантов инструкции {len(prompts_used)}, "
+        f"collect: {written} строк из {scanned} просмотренных, "
+        f"вариантов инструкции {len(prompts_used)}, тем {len(topics_used)}, "
         f"{metrics['seconds']} с → {out}"
     )
 
