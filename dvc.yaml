@@ -1,12 +1,3 @@
-# Пайплайн ДЗ 3: collect → clean → diversity → split.
-#
-# Два правила, из-за нарушения которых пайплайн «не пересчитывается»:
-#   deps — всё, от чего зависит результат: входные данные И код стадии;
-#   params — секции params.yaml, при изменении которых стадия обязана
-#            переисполниться (пути к источникам живут там, а не в deps).
-# Пути в outs дублируют paths.* из params.yaml: dvc.yaml не умеет читать
-# params, поэтому согласованность проверяется в tests/check.sh.
-
 stages:
   collect:
     cmd: python -m src.collect
@@ -18,6 +9,8 @@ stages:
       - paths.raw
     outs:
       - data/raw.jsonl
+      - data/val.jsonl
+      - data/test.jsonl
     metrics:
       - metrics/collect.json:
           cache: false
@@ -25,6 +18,7 @@ stages:
   clean:
     cmd: python -m src.clean
     deps:
+      - data/raw.jsonl        # <-- ФИКС: clean зависит от выхода collect
       - src/clean.py
       - src/dedup.py
       - src/pii.py
@@ -75,6 +69,8 @@ stages:
       - paths.test
     outs:
       - data/train.jsonl
+      - data/val.jsonl        # <-- ФИКС
+      - data/test.jsonl       # <-- ФИКС
     metrics:
       - metrics/split.json:
           cache: false
