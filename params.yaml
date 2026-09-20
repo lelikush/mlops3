@@ -5,7 +5,11 @@ collect:
   # Версия датасета переключается ЗДЕСЬ. Всё остальное — следствие.
   version: "v1"              # v1 | v2
   n_rows: 3000               # строк, берём из каждого файла-источника ПОСЛЕ фильтров
-  sources: "pavelfedortsov/russian-colloquial-sft-50k"
+  sources:
+    v1:
+      - "pavelfedortsov/russian-colloquial-sft-50k"
+    v2:
+      - "pavelfedortsov/russian-colloquial-sft-50k"
 
   # --- Переработка источника ---
   # Чужой готовый набор — это сырьё, а не сдача (см. README, «Готовый датасет

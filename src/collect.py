@@ -1,10 +1,7 @@
 """Стадия collect: источник → data/raw.jsonl.
 
-Источник — HuggingFace датасет pavelfedortsov/russian-colloquial-sft-50k.
-Переработка:
-  1. генерируем id из хэша user-сообщения;
-  2. генерируем topic эвристикой по ключевым словам;
-  3. вставляем system-промпт из collect.system_prompts по id.
+Источник — HF датасет из params.collect.sources[version][0].
+Переработка: генерируем id, topic (эвристикой), system-promt.
 """
 
 import hashlib
@@ -18,15 +15,15 @@ from src.config import load_params
 
 
 TOPIC_KEYWORDS = {
-    "politics_kz":  ["казахстан", "кыргыз", "қазақ", "назарбаев", "жапаров"],
-    "politics_ru":  ["росси", "путин", "кремл", "совок", "ссср", "хрущев"],
+    "politics_kz":   ["казахстан", "кыргыз", "қазақ", "назарбаев", "жапаров"],
+    "politics_ru":   ["росси", "путин", "кремл", "совок", "ссср", "хрущев"],
     "politics_world": ["украин", "израил", "палестин", "хамас", "албани"],
-    "tech":         ["телефон", "аккаунт", "телеграм", "приложен", "сайт", "программ", "нейросет", "код", "пароль"],
-    "religion":     ["аллах", "бог", "церков", "мечет", "религ", "молитв", "халяль"],
-    "math":         ["аргумент", "корень", "формул", "математик", "функци", "уравнен", "геометри"],
-    "daily":        ["квартир", "работ", "учёб", "универ", "семь", "друг", "родственник", "аренд", "зарплат"],
-    "culture":      ["фильм", "книг", "стих", "музык", "песн", "литератур", "борат"],
-    "emotion":      ["любл", "нравит", "свет", "звезд", "красот", "сердц", "чувств"],
+    "tech":          ["телефон", "аккаунт", "телеграм", "приложен", "сайт", "программ", "нейросет", "код", "пароль"],
+    "religion":      ["аллах", "бог", "церков", "мечет", "религ", "молитв", "халяль"],
+    "math":          ["аргумент", "корень", "формул", "математик", "функци", "уравнен", "геометри"],
+    "daily":         ["квартир", "работ", "учёб", "универ", "семь", "друг", "родственник", "аренд", "зарплат"],
+    "culture":       ["фильм", "книг", "стих", "музык", "песн", "литератур", "борат"],
+    "emotion":       ["любл", "нравит", "свет", "звезд", "красот", "сердц", "чувств"],
 }
 
 
@@ -57,6 +54,13 @@ def main() -> None:
     if not variants:
         raise SystemExit("collect.system_prompts пуст: инструкцию брать неоткуда")
 
+    # Берём первый источник для текущей версии (v1 или v2)
+    version = cfg["version"]
+    sources = cfg["sources"].get(version)
+    if not sources:
+        raise SystemExit(f"в collect.sources нет версии {version!r}")
+    hf_source = sources[0]
+
     out = Path(paths["raw"])
     out.parent.mkdir(parents=True, exist_ok=True)
 
@@ -65,7 +69,7 @@ def main() -> None:
     prompts_used: set[str] = set()
     topics_used: dict[str, int] = {}
 
-    ds = load_dataset(cfg["sources"], split="train", streaming=True)
+    ds = load_dataset(hf_source, split="train", streaming=True)
 
     with out.open("w", encoding="utf-8") as fh:
         for row in ds:
@@ -98,8 +102,8 @@ def main() -> None:
             written += 1
 
     metrics = {
-        "version": cfg["version"],
-        "sources": cfg["sources"],
+        "version": version,
+        "source": hf_source,
         "rows_scanned": scanned,
         "rows_written": written,
         "system_prompt_variants": len(prompts_used),
