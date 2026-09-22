@@ -126,9 +126,11 @@ def main() -> None:
     mpath.write_text(json.dumps(metrics, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     if failed:
-        # TODO: гейт или отчёт? Стадия, которая сообщает о проблеме и продолжает,
-        # не мешает вырожденному набору доехать до обучения.
-        print("diversity: предупреждение — " + "; ".join(failed))
+        if failed:
+            raise SystemExit(
+                "diversity: гейт закрыт — набор обучать нельзя:\n  - "
+                + "\n  - ".join(failed)
+            )
 
     print(
         f"diversity: {stats['examples']} строк, {stats['system_prompts']} системных промптов, "

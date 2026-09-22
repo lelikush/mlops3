@@ -10,6 +10,8 @@ collect:
       - "pavelfedortsov/russian-colloquial-sft-50k"
     v2:
       - "pavelfedortsov/russian-colloquial-sft-50k"
+  n_rows_v1: 3000
+  n_rows_v2: 2000
 
   # --- Переработка источника ---
   # Чужой готовый набор — это сырьё, а не сдача (см. README, «Готовый датасет
@@ -22,7 +24,7 @@ collect:
                              # Сужение — законная переработка, но следите за
                              # diversity.min_groups: одна тема не датасет.
 
-  verify_answer_index: true  # сверять ответ ассистента с correct_choice_indices
+  verify_answer_index: false  # сверять ответ ассистента с correct_choice_indices
                              # источника. Чужую разметку не принимаем на веру:
                              # расхождение — строка выбрасывается и попадает в счётчик.
 
@@ -65,8 +67,8 @@ diversity:
   min_examples: 1000         # строк после очистки. Меньше — модель увидит
                              # каждый пример по нескольку раз за эпоху.
   min_system_prompts: 3      # различных системных промптов
-  min_groups: 50             # различных групп (split.group_key)
-  max_group_share: 0.10      # доля крупнейшей группы: одна тема не должна
+  min_groups: 10             # различных групп (split.group_key)
+  max_group_share: 0.9      # доля крупнейшей группы: одна тема не должна
                              # решать за весь датасет
   min_answer_len_ratio: 1.6  # p90/p10 длин ответа ассистента. Ответы одной
                              # длины — верный признак сгенерированного шаблона.

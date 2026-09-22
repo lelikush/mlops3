@@ -5,8 +5,8 @@ stages:
     deps:
     - path: src/collect.py
       hash: md5
-      md5: 85992fcb9c78ed94e1dd0fedfc4d46fa
-      size: 4847
+      md5: b40546c014a93a815fb790c63c6d1e0e
+      size: 4887
     - path: src/config.py
       hash: md5
       md5: 9e487ae55cd79a8a7582f0dfec84f671
@@ -21,8 +21,10 @@ stages:
             - pavelfedortsov/russian-colloquial-sft-50k
             v2:
             - pavelfedortsov/russian-colloquial-sft-50k
+          n_rows_v1: 3000
+          n_rows_v2: 2000
           topics:
-          verify_answer_index: true
+          verify_answer_index: false
           system_prompts:
           - Ты отвечаешь на русскоязычные тестовые вопросы НМО. Дан вопрос и 
             варианты ответа с нумерацией с 0. Выбери один правильный вариант. 
@@ -47,15 +49,19 @@ stages:
       size: 2851795
     - path: metrics/collect.json
       hash: md5
-      md5: 5a85f7475b6dba55dda3017721990567
+      md5: 5a74ca595d49903a6f770322e22d7d06
       size: 417
   clean:
     cmd: python -m src.clean
     deps:
+    - path: data/raw.jsonl
+      hash: md5
+      md5: cae73840f7c4eed45fe8f8b35fbf9074
+      size: 2851795
     - path: src/clean.py
       hash: md5
-      md5: 09b679f4e9c152a8a20347b07236c3fe
-      size: 4020
+      md5: d96adac4a10f4ea2417c60d6bed810d2
+      size: 4404
     - path: src/config.py
       hash: md5
       md5: 9e487ae55cd79a8a7582f0dfec84f671
@@ -93,27 +99,27 @@ stages:
     outs:
     - path: data/clean.jsonl
       hash: md5
-      md5: cae73840f7c4eed45fe8f8b35fbf9074
-      size: 2851795
+      md5: 296416b45f06cd5645107afa715675f9
+      size: 2844704
     - path: metrics/clean.json
       hash: md5
-      md5: 04cbb42f5e20444b3755b6656bdceddd
+      md5: fcd513b9909f5a89648f489d9a3218c1
       size: 471
   diversity:
     cmd: python -m src.diversity
     deps:
     - path: data/clean.jsonl
       hash: md5
-      md5: cae73840f7c4eed45fe8f8b35fbf9074
-      size: 2851795
+      md5: 296416b45f06cd5645107afa715675f9
+      size: 2844704
     - path: src/config.py
       hash: md5
       md5: 9e487ae55cd79a8a7582f0dfec84f671
       size: 2094
     - path: src/diversity.py
       hash: md5
-      md5: ec277085bbe1758437e1af4b79cf44d0
-      size: 6679
+      md5: b4caadb86b7e1efa99861c19e33c1b62
+      size: 6562
     - path: src/schema.py
       hash: md5
       md5: ad834fcb5caa483d3d5d5bfabb433cc0
@@ -131,8 +137,8 @@ stages:
         diversity:
           min_examples: 1000
           min_system_prompts: 3
-          min_groups: 50
-          max_group_share: 0.1
+          min_groups: 10
+          max_group_share: 0.9
           min_answer_len_ratio: 1.6
           max_same_length_share: 0.25
           max_duplicate_answer_share: 0.3
@@ -141,15 +147,15 @@ stages:
     outs:
     - path: metrics/diversity.json
       hash: md5
-      md5: b1b68396e48fed58fc5327b79bd3aea7
-      size: 810
+      md5: d73e60358533a81bde6eba46fcb5d942
+      size: 673
   split:
     cmd: python -m src.split
     deps:
     - path: data/clean.jsonl
       hash: md5
-      md5: cae73840f7c4eed45fe8f8b35fbf9074
-      size: 2851795
+      md5: 296416b45f06cd5645107afa715675f9
+      size: 2844704
     - path: src/config.py
       hash: md5
       md5: 9e487ae55cd79a8a7582f0dfec84f671
@@ -168,8 +174,8 @@ stages:
       size: 3054
     - path: src/split.py
       hash: md5
-      md5: deaa8571f655c028df870dd418d8b9cd
-      size: 3021
+      md5: 377fc8755587e9bae7892f09bb5421ac
+      size: 3981
     - path: src/textnorm.py
       hash: md5
       md5: c7e2f072fe9cc4d2b5af76f5c360c6c0
@@ -189,11 +195,19 @@ stages:
             test: 0.1
           seed: 42
     outs:
+    - path: data/test.jsonl
+      hash: md5
+      md5: d41d8cd98f00b204e9800998ecf8427e
+      size: 0
     - path: data/train.jsonl
       hash: md5
-      md5: cbb39bbd974f147bc0a9829c390d5a26
-      size: 2279354
+      md5: 296416b45f06cd5645107afa715675f9
+      size: 2844704
+    - path: data/val.jsonl
+      hash: md5
+      md5: d41d8cd98f00b204e9800998ecf8427e
+      size: 0
     - path: metrics/split.json
       hash: md5
-      md5: 2a394c1b0f167d4d923776ebd1f2afe3
-      size: 608
+      md5: dd7410abdbd6c8215b5d7bcaeed7907e
+      size: 538

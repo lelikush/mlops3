@@ -68,6 +68,17 @@ def main() -> None:
 
     # 5. TODO: сюда просится ещё один шаг дедупликации.
     near: set[int] = set()
+    nd = cfg["near_dup"]
+    if nd.get("enabled"):
+        from src.dedup import near_duplicates
+        near_list = near_duplicates(
+            [normalize_text(ex.user) for ex in kept],
+            nd["shingle_words"],
+            nd["num_perm"],
+            nd["threshold"],
+        )
+        near = set(near_list)
+        kept = [ex for i, ex in enumerate(kept) if i not in near]
 
     out = Path(paths["clean"])
     out.parent.mkdir(parents=True, exist_ok=True)

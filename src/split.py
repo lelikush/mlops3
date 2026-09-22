@@ -25,6 +25,33 @@ def row_split(count: int, ratios: dict[str, float], seed: int) -> list[str]:
         start = stop
     return labels
 
+def group_split(examples, ratios, seed, group_key="topic"):
+    """Раздать метки так, чтобы вся группа попала в один сплит."""
+    from collections import defaultdict
+    from src.textnorm import normalize_group
+
+    groups = defaultdict(list)
+    for i, ex in enumerate(examples):
+        key = normalize_group(getattr(ex, group_key))
+        groups[key].append(i)
+
+    keys = list(groups)
+    random.Random(seed).shuffle(keys)
+
+    labels = [""] * len(examples)
+    names = list(ratios)
+    total = len(examples)
+    assigned = 0
+    start = 0
+    for i, name in enumerate(names):
+        target = total if i == len(names) - 1 else round(total * ratios[name])
+        while assigned < target and start < len(keys):
+            key = keys[start]
+            for idx in groups[key]:
+                labels[idx] = name
+            assigned += len(groups[key])
+            start += 1
+    return labels
 
 def main() -> None:
     params = load_params()
@@ -41,7 +68,7 @@ def main() -> None:
         key = normalize_group(ex.topic)
         sizes[key] = sizes.get(key, 0) + 1
 
-    labels = row_split(len(examples), cfg["ratios"], cfg["seed"])
+    labels = group_split(examples, cfg["ratios"], cfg["seed"], cfg["group_key"])
     buckets: dict[str, list[Example]] = {name: [] for name in cfg["ratios"]}
     for label, ex in zip(labels, examples):
         buckets[label].append(ex)

@@ -49,13 +49,13 @@ def main() -> None:
     params = load_params()
     cfg = params["collect"]
     paths = params["paths"]
-    n_rows = cfg["n_rows"]
+    version = cfg["version"]
+    n_rows = cfg.get(f"n_rows_{version}", cfg.get("n_rows", 3000))
     variants = cfg["system_prompts"]
     if not variants:
         raise SystemExit("collect.system_prompts пуст: инструкцию брать неоткуда")
 
     # Берём первый источник для текущей версии (v1 или v2)
-    version = cfg["version"]
     sources = cfg["sources"].get(version)
     if not sources:
         raise SystemExit(f"в collect.sources нет версии {version!r}")
